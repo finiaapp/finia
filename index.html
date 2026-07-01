@@ -525,26 +525,26 @@ function fmtDate(d){const y=d.getFullYear();const m=String(d.getMonth()+1).padSt
 function txSem(){const debut=debutSem(new Date());const fin=new Date(debut);fin.setDate(fin.getDate()+6);const ds=fmtDate(debut);const df=fmtDate(fin);return transactions.filter(t=>t.date>=ds&&t.date<=df);}
 function txMois(){const d=new Date();const p=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');return transactions.filter(t=>t.date.startsWith(p));}
 
-window.onload=function(){
-  checkAccess();
-  // ===== SUPABASE =====
+// ===== SUPABASE GLOBAL =====
 const SUPABASE_URL = 'https://ydmdnounskvkroxtiaux.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkbWRub3Vuc2t2a3JveHRpYXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NTI3NzYsImV4cCI6MjA5ODQyODc3Nn0.U6sbgRFCmPQjSc89t32Q2ENV3N3t9MHe2BFFAAoPPXk';
-let supabase;
+let supabase = null;
 let currentUser = null;
 
 function initSupabase() {
-  if (typeof supabaseJs !== 'undefined') {
-    supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_KEY);
-  } else if (typeof window.supabase !== 'undefined') {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  } else {
-    console.warn('Supabase SDK non chargé, mode localStorage');
-  }
+  try {
+    if (typeof supabaseJs !== 'undefined') {
+      supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } else if (window.supabase && typeof window.supabase.createClient === 'function') {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } else {
+      console.warn('Supabase SDK non disponible');
+    }
+  } catch(e) { console.warn('initSupabase erreur:', e); }
 }
 
 // ===== AUTHENTIFICATION SUPABASE =====
-const CODE_BETA = 'FINIA2026'; // Code d'accès bêta
+const CODE_BETA = 'FINIA2026';
 
 function switchAuthTab(tab) {
   const isConnexion = tab === 'connexion';
@@ -559,14 +559,14 @@ function switchAuthTab(tab) {
 
 function showAuthError(msg) {
   const el = document.getElementById('loginError');
-  el.textContent = '❌ ' + msg;
+  el.textContent = '\u274C ' + msg;
   el.style.display = 'block';
   document.getElementById('loginSuccess').style.display = 'none';
 }
 
 function showAuthSuccess(msg) {
   const el = document.getElementById('loginSuccess');
-  el.textContent = '✓ ' + msg;
+  el.textContent = '\u2713 ' + msg;
   el.style.display = 'block';
   document.getElementById('loginError').style.display = 'none';
 }
@@ -580,12 +580,11 @@ async function seConnecter() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   if (!email || !password) { showAuthError('Entre ton email et ton mot de passe.'); return; }
-
   const btn = document.getElementById('loginBtn');
   btn.textContent = 'Connexion...';
   btn.disabled = true;
-
   try {
+    if (!supabase) initSupabase();
     if (supabase) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
@@ -593,12 +592,11 @@ async function seConnecter() {
       await chargerDonneesSupabase();
       ouvrirApp();
     } else {
-      // Mode fallback localStorage
       ouvrirApp();
     }
   } catch(e) {
     showAuthError(e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : e.message);
-    btn.textContent = 'Se connecter →';
+    btn.textContent = 'Se connecter \u2192';
     btn.disabled = false;
   }
 }
@@ -607,12 +605,11 @@ async function sInscrire() {
   const email = document.getElementById('signupEmail').value.trim();
   const password = document.getElementById('signupPassword').value;
   const code = document.getElementById('signupCode').value.trim().toUpperCase();
-
   if (!email || !password) { showAuthError('Remplis tous les champs.'); return; }
   if (password.length < 8) { showAuthError('Le mot de passe doit avoir au moins 8 caractères.'); return; }
-  if (code !== CODE_BETA) { showAuthError("Code d'accès bêta incorrect. Contacte finia.contact@gmail.com"); return; }
-
+  if (code !== CODE_BETA) { showAuthError("Code d\'accès bêta incorrect. Contacte finia.contact@gmail.com"); return; }
   try {
+    if (!supabase) initSupabase();
     if (supabase) {
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
@@ -629,37 +626,19 @@ async function sInscrire() {
 async function chargerDonneesSupabase() {
   if (!supabase || !currentUser) return;
   try {
-    // Charger config
-    const { data: configData } = await supabase
-      .from('config')
-      .select('data')
-      .eq('id', currentUser.id)
-      .single();
+    const { data: configData } = await supabase.from('config').select('data').eq('id', currentUser.id).single();
     if (configData?.data && Object.keys(configData.data).length > 0) {
       config = { ...JSON.parse(JSON.stringify(DEFAUT)), ...configData.data };
     }
-
-    // Charger transactions
-    const { data: txData } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .order('date', { ascending: false });
+    const { data: txData } = await supabase.from('transactions').select('*').eq('user_id', currentUser.id).order('date', { ascending: false });
     if (txData) {
       transactions = txData.map(t => ({
-        id: t.id,
-        type: t.type,
-        cat: t.cat,
-        montant: parseFloat(t.montant),
-        date: t.date,
-        note: t.note || '',
-        mode: t.mode || '',
-        carte: t.carte || ''
+        id: t.id, type: t.type, cat: t.cat,
+        montant: parseFloat(t.montant), date: t.date,
+        note: t.note || '', mode: t.mode || '', carte: t.carte || ''
       }));
     }
-  } catch(e) {
-    console.error('Erreur chargement Supabase:', e);
-  }
+  } catch(e) { console.error('Erreur chargement Supabase:', e); }
 }
 
 async function sauvegarderConfigSupabase() {
@@ -669,54 +648,23 @@ async function sauvegarderConfigSupabase() {
   } catch(e) { saveCfg(); }
 }
 
-async function sauvegarderTransactionSupabase(tx) {
-  if (!supabase || !currentUser) return;
-  try {
-    await supabase.from('transactions').insert({
-      user_id: currentUser.id,
-      type: tx.type,
-      cat: tx.cat,
-      montant: tx.montant,
-      date: tx.date,
-      note: tx.note || '',
-      mode: tx.mode || '',
-      carte: tx.carte || ''
-    });
-  } catch(e) { console.error('Erreur sauvegarde transaction:', e); }
-}
-
-async function supprimerTransactionSupabase(id) {
-  if (!supabase || !currentUser) return;
-  try {
-    await supabase.from('transactions').delete().eq('id', id).eq('user_id', currentUser.id);
-  } catch(e) { console.error('Erreur suppression:', e); }
-}
-
 function ouvrirApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   sessionStorage.setItem('finia_access', 'granted');
-  // Afficher email dans le header
   if (currentUser) {
-    const headerUser = document.getElementById('header-user');
-    const headerEmail = document.getElementById('header-email');
-    if (headerUser) headerUser.style.display = 'flex';
-    if (headerEmail) headerEmail.textContent = currentUser.email;
-    // Afficher dans Paramètres
-    const paramsInfo = document.getElementById('params-user-info');
-    const paramsEmail = document.getElementById('params-user-email');
-    if (paramsInfo) paramsInfo.style.display = 'block';
-    if (paramsEmail) paramsEmail.textContent = currentUser.email;
+    const hu = document.getElementById('header-user');
+    const he = document.getElementById('header-email');
+    if (hu) hu.style.display = 'flex';
+    if (he) he.textContent = currentUser.email;
   }
   renderAll();
 }
 
 async function checkAccess() {
-  initSupabase();
-  // Toujours cacher l'app par défaut
+  if (!supabase) initSupabase();
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
-  
   if (supabase) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -726,25 +674,21 @@ async function checkAccess() {
         ouvrirApp();
         return;
       }
-    } catch(e) {
-      console.warn('Erreur session:', e);
-    }
+    } catch(e) { console.warn('Erreur session:', e); }
   }
-  
-  // Afficher l'écran de connexion
-  setTimeout(() => {
-    const el = document.getElementById('loginEmail');
-    if (el) el.focus();
-  }, 100);
+  setTimeout(() => { const el = document.getElementById('loginEmail'); if (el) el.focus(); }, 100);
 }
 
-// Déconnexion
 async function seDeconnecter() {
   if (supabase) await supabase.auth.signOut();
   currentUser = null;
   sessionStorage.removeItem('finia_access');
   location.reload();
 }
+
+window.onload=function(){
+  initSupabase();
+  checkAccess();
 
 // Configurer PDF.js worker
   if (typeof pdfjsLib !== 'undefined') {
