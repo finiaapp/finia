@@ -118,6 +118,79 @@ input:focus,select:focus{border-color:var(--accent);background:#FFFFFF;}
 </style>
 </head>
 <body>
+<!-- ÉCRAN DE CONNEXION SUPABASE -->
+<div id="loginScreen" style="display:flex;">
+  <div id="loginBox">
+    <div style="margin-bottom:24px;">
+      <div style="font-size:32px;font-weight:300;color:#C9A84C;letter-spacing:-1px;margin-bottom:4px;">finia</div>
+      <div style="font-size:11px;letter-spacing:3px;color:#AAAAAA;font-weight:400;">SMART FINANCE · AI</div>
+    </div>
+
+    <!-- Onglets -->
+    <div style="display:flex;gap:0;margin-bottom:24px;border-radius:10px;overflow:hidden;border:1px solid #EAEAEA;">
+      <button id="tabConnexion" onclick="switchAuthTab('connexion')"
+        style="flex:1;padding:10px;border:none;background:#C9A84C;color:#1A1612;font-weight:700;font-size:13px;cursor:pointer;">
+        Connexion
+      </button>
+      <button id="tabInscription" onclick="switchAuthTab('inscription')"
+        style="flex:1;padding:10px;border:none;background:#F5F5F5;color:#AAAAAA;font-weight:500;font-size:13px;cursor:pointer;">
+        Créer un compte
+      </button>
+    </div>
+
+    <div id="loginError" style="display:none;padding:10px 14px;background:#FEF2F2;border-radius:8px;border-left:3px solid #C0392B;font-size:13px;color:#7f1d1d;margin-bottom:16px;text-align:left;"></div>
+    <div id="loginSuccess" style="display:none;padding:10px 14px;background:#F0FDF4;border-radius:8px;border-left:3px solid #1D6B4E;font-size:13px;color:#0f5133;margin-bottom:16px;text-align:left;"></div>
+
+    <!-- Formulaire Connexion -->
+    <div id="formConnexion">
+      <div style="margin-bottom:12px;text-align:left;">
+        <label style="font-size:11px;font-weight:600;color:#AAAAAA;letter-spacing:.5px;display:block;margin-bottom:6px;">EMAIL</label>
+        <input type="email" id="loginEmail" placeholder="ton@email.com"
+          style="width:100%;padding:12px 14px;border:2px solid #EAEAEA;border-radius:10px;font-size:14px;outline:none;color:#1A1612;background:#FAFAFA;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+      </div>
+      <div style="margin-bottom:16px;text-align:left;">
+        <label style="font-size:11px;font-weight:600;color:#AAAAAA;letter-spacing:.5px;display:block;margin-bottom:6px;">MOT DE PASSE</label>
+        <input type="password" id="loginPassword" placeholder="••••••••"
+          style="width:100%;padding:12px 14px;border:2px solid #EAEAEA;border-radius:10px;font-size:14px;outline:none;color:#1A1612;background:#FAFAFA;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')seConnecter()">
+      </div>
+      <button id="loginBtn" onclick="seConnecter()"
+        style="width:100%;padding:14px;background:#C9A84C;color:#1A1612;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+        Se connecter →
+      </button>
+    </div>
+
+    <!-- Formulaire Inscription -->
+    <div id="formInscription" style="display:none;">
+      <div style="margin-bottom:12px;text-align:left;">
+        <label style="font-size:11px;font-weight:600;color:#AAAAAA;letter-spacing:.5px;display:block;margin-bottom:6px;">EMAIL</label>
+        <input type="email" id="signupEmail" placeholder="ton@email.com"
+          style="width:100%;padding:12px 14px;border:2px solid #EAEAEA;border-radius:10px;font-size:14px;outline:none;color:#1A1612;background:#FAFAFA;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:12px;text-align:left;">
+        <label style="font-size:11px;font-weight:600;color:#AAAAAA;letter-spacing:.5px;display:block;margin-bottom:6px;">MOT DE PASSE</label>
+        <input type="password" id="signupPassword" placeholder="Minimum 8 caractères"
+          style="width:100%;padding:12px 14px;border:2px solid #EAEAEA;border-radius:10px;font-size:14px;outline:none;color:#1A1612;background:#FAFAFA;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:16px;text-align:left;">
+        <label style="font-size:11px;font-weight:600;color:#AAAAAA;letter-spacing:.5px;display:block;margin-bottom:6px;">CODE D'ACCÈS BÊTA</label>
+        <input type="text" id="signupCode" placeholder="Code fourni par Finia"
+          style="width:100%;padding:12px 14px;border:2px solid #EAEAEA;border-radius:10px;font-size:14px;outline:none;color:#1A1612;background:#FAFAFA;box-sizing:border-box;font-family:monospace;letter-spacing:2px;">
+      </div>
+      <button onclick="sInscrire()"
+        style="width:100%;padding:14px;background:#1D6B4E;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+        Créer mon compte →
+      </button>
+    </div>
+
+    <div style="margin-top:20px;font-size:11px;color:#CCCCCC;text-align:center;">
+      <a href="mailto:finia.contact@gmail.com" style="color:#C9A84C;text-decoration:none;">finia.contact@gmail.com</a>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
 <header>
   <div style="display:flex;align-items:center;">
     <img src="data:image/png;base64,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" alt="Finia — Smart Finance AI" style="height:44px;width:auto;object-fit:contain;">
@@ -453,6 +526,7 @@ function txSem(){const debut=debutSem(new Date());const fin=new Date(debut);fin.
 function txMois(){const d=new Date();const p=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');return transactions.filter(t=>t.date.startsWith(p));}
 
 window.onload=function(){
+  checkAccess();
   // ===== SUPABASE =====
 const SUPABASE_URL = 'https://ydmdnounskvkroxtiaux.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkbWRub3Vuc2t2a3JveHRpYXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NTI3NzYsImV4cCI6MjA5ODQyODc3Nn0.U6sbgRFCmPQjSc89t32Q2ENV3N3t9MHe2BFFAAoPPXk';
@@ -2237,6 +2311,7 @@ function renderBilanSemaines(txs, rev, dep) {
 
 </script>
 
+</div><!-- fin app -->
 <footer style="background:#FFFFFF;border-top:1px solid #EAEAEA;padding:16px 2rem;text-align:center;margin-top:2rem;">
   <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
     <div style="display:flex;align-items:center;gap:10px;">
