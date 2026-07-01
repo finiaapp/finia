@@ -997,6 +997,7 @@ function genRecoJour(txs,rev,dep,solde){
   if(!txs.length){r.push({type:'info',titre:'Journee vide',msg:'Commence a enregistrer tes revenus et depenses pour recevoir des recommandations.'});return r;}
   if(rev===0&&dep>0)r.push({type:'warn',titre:'Depenses seulement',msg:'Tu as des depenses enregistrees sans revenu. Pense a saisir tes revenus.'});
   if(rev>0&&solde>0)r.push({type:'good',titre:'Bonne journee',msg:`Solde positif de ${fmt(solde)} aujourd'hui. Continue!`});
+  
   if(solde<0)r.push({type:'bad',titre:'Solde negatif',msg:`Tu as depense ${fmt(Math.abs(solde))} de plus que tes revenus du jour.`});
   // PYF
   if(rev>0){
