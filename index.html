@@ -16,7 +16,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 header{background:#0D0C0A;border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:100;}
 .logo{font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--gold);}
 .logo span{color:var(--text2);font-weight:400;}
-.date-now{font-size:13px;color:var(--text2);font-family:var(--mono);}
+.date-now{font-size:13px;color:#B8B8B8;font-family:var(--mono);}
 .tabs{display:flex;gap:4px;background:#FFFFFF;border-radius:12px;margin:12px 2rem;padding:4px;box-shadow:0 1px 6px rgba(0,0,0,0.06);overflow-x:auto;}
 .tab{padding:9px 16px;font-size:13px;font-weight:500;color:#888;cursor:pointer;border:none;background:none;white-space:nowrap;transition:all .15s;border-radius:8px;flex:1;text-align:center;}
 .tab:hover{color:var(--text);background:#F5F5F5;}.tab.active{color:#1A1612;background:#C9A84C;font-weight:700;box-shadow:0 2px 8px rgba(201,168,76,0.3);}
@@ -499,6 +499,31 @@ input:focus,select:focus{border-color:var(--accent);background:#FFFFFF;}
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-danger btn-sm" onclick="reinitTx()">Effacer toutes les transactions</button>
       <button class="btn btn-danger btn-sm" onclick="reinitTout()">Réinitialisation complète</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE MODIFICATION TRANSACTION -->
+<div id="editTxModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(13,12,10,0.55);z-index:1000;align-items:center;justify-content:center;padding:16px;">
+  <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div class="card-title">Modifier la transaction</div>
+    <input type="hidden" id="edit-id">
+    <div class="form-row">
+      <div class="field" style="margin-bottom:0"><label>Type</label><select id="edit-type" onchange="updateEditCategories()"><option value="revenu">Revenu</option><option value="depense">Dépense</option></select></div>
+      <div class="field" style="margin-bottom:0"><label>Catégorie</label><select id="edit-cat"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="field" style="margin-bottom:0"><label>Mode de paiement</label><select id="edit-mode" onchange="updateEditCarteSelect()"><option value="">— Aucun —</option><option value="debit">Carte de débit</option><option value="credit">Carte de crédit</option><option value="comptant">Comptant</option><option value="virement">Virement</option></select></div>
+      <div class="field" style="margin-bottom:0" id="edit-carte-wrap"><label>Quelle carte?</label><select id="edit-carte"><option value="">— Sélectionner —</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="field" style="margin-bottom:0"><label>Montant ($)</label><input type="number" id="edit-montant" min="0" step="0.01"></div>
+      <div class="field" style="margin-bottom:0"><label>Date</label><input type="date" id="edit-date"></div>
+    </div>
+    <div class="field"><label>Note (optionnel)</label><input type="text" id="edit-note"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="enregistrerModificationTransaction()" style="flex:1;background:#C9A84C;color:#1A1612;font-weight:700;">Enregistrer les modifications</button>
+      <button class="btn btn-sm" onclick="fermerModaleEdition()" style="background:#F5F5F5;color:#37474F;border:1.5px solid #E0E0E0;">Annuler</button>
     </div>
   </div>
 </div>
@@ -1204,6 +1229,73 @@ function supprimerTransaction(id){
   if(!confirm('Supprimer cette transaction?'))return;
   transactions=transactions.filter(t=>t.id!==id);
   saveTx();supprimerTransactionSupabase(id);renderAll();
+  const detailEl=document.getElementById('calDetail');
+  if(calDetailDs&&detailEl&&detailEl.style.display!=='none')afficherDetailJour(calDetailDs);
+}
+function updateEditCategories(){
+  const type=document.getElementById('edit-type').value;
+  const sel=document.getElementById('edit-cat');
+  const cats=config.categories[type]||[];
+  sel.innerHTML=cats.length?cats.map(c=>'<option value="'+c.nom+'">'+c.nom+'</option>').join(''):'<option value="">Aucune catégorie</option>';
+}
+function updateEditCarteSelect(){
+  const mode=document.getElementById('edit-mode').value;
+  const wrap=document.getElementById('edit-carte-wrap');
+  const sel=document.getElementById('edit-carte');
+  if(mode==='credit'){
+    wrap.style.display='flex';
+    const cartes=getCartesCredit();
+    sel.innerHTML=cartes.length?cartes.map(c=>'<option value="'+c.nom+'">'+c.nom+'</option>').join(''):'<option value="">Aucune carte</option>';
+  } else if(mode==='debit'){
+    wrap.style.display='flex';
+    const comptes=getCartesDebit();
+    sel.innerHTML=comptes.length?comptes.map(c=>'<option value="'+c.nom+'">'+c.nom+'</option>').join(''):'<option value="">Aucun compte</option>';
+  } else {
+    wrap.style.display='none';
+    sel.innerHTML='';
+  }
+}
+function modifierTransaction(id){
+  const t=transactions.find(t=>t.id===id);
+  if(!t)return;
+  document.getElementById('edit-id').value=t.id;
+  document.getElementById('edit-type').value=t.type;
+  updateEditCategories();
+  document.getElementById('edit-cat').value=t.cat;
+  document.getElementById('edit-mode').value=t.mode||'';
+  updateEditCarteSelect();
+  document.getElementById('edit-carte').value=t.carte||'';
+  document.getElementById('edit-montant').value=t.montant;
+  document.getElementById('edit-date').value=t.date;
+  document.getElementById('edit-note').value=t.note||'';
+  document.getElementById('editTxModal').style.display='flex';
+}
+function fermerModaleEdition(){
+  document.getElementById('editTxModal').style.display='none';
+}
+function enregistrerModificationTransaction(){
+  const id=parseFloat(document.getElementById('edit-id').value);
+  const t=transactions.find(t=>t.id===id);
+  if(!t)return;
+  const type=document.getElementById('edit-type').value;
+  const cat=document.getElementById('edit-cat').value;
+  const montant=parseFloat(document.getElementById('edit-montant').value);
+  const date=document.getElementById('edit-date').value;
+  const note=document.getElementById('edit-note').value.trim();
+  const mode=document.getElementById('edit-mode').value;
+  const carte=document.getElementById('edit-carte').value;
+  if(!cat){alert('Aucune catégorie. Ajoutes-en une dans Paramètres.');return;}
+  if(!montant||montant<=0){alert('Saisis un montant valide.');return;}
+  if(!date){alert('Choisis une date.');return;}
+  t.type=type;t.cat=cat;t.montant=montant;t.date=date;t.note=note;t.mode=mode;t.carte=carte;
+  if(mode!=='credit'){ t.rembourse=undefined; }
+  else if(t.rembourse===undefined){ t.rembourse=false; }
+  saveTx();sauvegarderTransactionSupabase(t);
+  fermerModaleEdition();
+  renderAll();
+  const detailEl=document.getElementById('calDetail');
+  if(calDetailDs&&detailEl&&detailEl.style.display!=='none')afficherDetailJour(calDetailDs);
+  toast('✅ Transaction modifiée.');
 }
 function toggleRembourse(id){
   const t=transactions.find(t=>t.id===id);
@@ -1269,7 +1361,7 @@ function renderJour(){
     if(t.rembourse)return '<button onclick="toggleRembourse('+t.id+')" style="font-size:9px;padding:2px 7px;border-radius:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;font-weight:600;cursor:pointer;">✅ Remboursé</button>';
     return '<button onclick="toggleRembourse('+t.id+')" style="font-size:9px;padding:2px 7px;border-radius:10px;background:#FFFBEB;color:#92700A;border:1px solid #FDE68A;font-weight:600;cursor:pointer;">⏳ Marquer remboursé</button>';
   }
-  list.innerHTML=txs.length===0?'<div class="empty-state">Aucune transaction aujourd\'hui</div>':txs.slice().reverse().map(t=>`<div class="tx-item"><div class="tx-left"><div class="tx-dot" style="background:${getCouleur(t.cat)}"></div><div><div class="tx-cat">${t.cat}</div><div style="display:flex;gap:4px;align-items:center;margin-top:2px;flex-wrap:wrap;">${badgeMode(t)}${boutonRembourse(t)}${t.note?'<span style="font-size:10px;color:#AAAAAA;">'+t.note+'</span>':''}</div></div></div><div class="tx-right"><div class="tx-amount ${t.type==='revenu'?'rev':'dep'}">${t.type==='revenu'?'+':'-'}${fmt(t.montant)}</div><button class="tx-del" onclick="supprimerTransaction(${t.id})">&#215;</button></div></div>`).join('');
+  list.innerHTML=txs.length===0?'<div class="empty-state">Aucune transaction aujourd\'hui</div>':txs.slice().reverse().map(t=>`<div class="tx-item"><div class="tx-left"><div class="tx-dot" style="background:${getCouleur(t.cat)}"></div><div><div class="tx-cat">${t.cat}</div><div style="display:flex;gap:4px;align-items:center;margin-top:2px;flex-wrap:wrap;">${badgeMode(t)}${boutonRembourse(t)}${t.note?'<span style="font-size:10px;color:#AAAAAA;">'+t.note+'</span>':''}</div></div></div><div class="tx-right"><div class="tx-amount ${t.type==='revenu'?'rev':'dep'}">${t.type==='revenu'?'+':'-'}${fmt(t.montant)}</div><button class="tx-del" onclick="modifierTransaction(${t.id})" title="Modifier" style="color:#2563EB;">&#9998;</button><button class="tx-del" onclick="supprimerTransaction(${t.id})" title="Supprimer">&#215;</button></div></div>`).join('');
   renderRecos('jourRecoList',genRecoJour(txs,rev,dep,solde));
   initScanSelects();
   renderRepartitionJour(txs, dep);
@@ -2099,8 +2191,12 @@ function afficherDetailJour(ds) {
         + '<div style="font-size:11px;color:#AAAAAA;">' + (t.note||'') + '</div>'
         + '<div style="margin-top:2px;">' + badges + carteSpan + '</div>'
         + rembBtn + '</div></div>'
+        + '<div style="display:flex;align-items:center;gap:8px;">'
         + '<div style="font-size:14px;font-weight:700;font-family:monospace;color:' + (t.type==='revenu'?'#1D6B4E':'#C0392B') + ';">'
         + (t.type==='revenu'?'+':'-') + fmt(t.montant) + '</div>'
+        + '<button class="tx-del" onclick="modifierTransaction('+t.id+')" title="Modifier" style="color:#2563EB;">&#9998;</button>'
+        + '<button class="tx-del" onclick="supprimerTransaction('+t.id+')" title="Supprimer">&#215;</button>'
+        + '</div>'
         + '</div>';
     }).join('');
 
