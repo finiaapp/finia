@@ -399,6 +399,9 @@ input:focus,select:focus{border-color:var(--accent);background:#FFFFFF;}
       <div class="field" style="margin-bottom:0"><label>Ton nom</label><input type="text" id="p-nom" placeholder="ex: Gilbert Guebong Noah"></div>
       <div class="field" style="margin-bottom:0"><label>Titre de l'outil</label><input type="text" id="p-titre" placeholder="ex: Gestion Financière Personnelle"></div>
     </div>
+    <div class="form-row">
+      <div class="field" style="margin-bottom:0;max-width:200px;"><label>Pay Yourself First : % de tes revenus à te verser</label><input type="number" id="p-pyf" min="0" max="100" step="1" placeholder="10"></div>
+    </div>
     <br><button class="btn btn-primary btn-sm" onclick="sauvegarderProfil()">Enregistrer</button>
   </div>
 
@@ -528,9 +531,33 @@ input:focus,select:focus{border-color:var(--accent);background:#FFFFFF;}
   </div>
 </div>
 
+<!-- MODALE REMBOURSEMENT CARTE DE CRÉDIT -->
+<div id="remboursementModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(13,12,10,0.55);z-index:1000;align-items:center;justify-content:center;padding:16px;">
+  <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div class="card-title">Confirmer le remboursement</div>
+    <input type="hidden" id="remb-id">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:1rem" id="remb-resume"></p>
+    <div class="field"><label>Date du remboursement</label><input type="date" id="remb-date"></div>
+    <div class="field">
+      <label>Avec quoi as-tu remboursé?</label>
+      <select id="remb-canal" onchange="updateRembCarteSelect()">
+        <option value="debit">Compte débit</option>
+        <option value="epargne">Épargne personnelle (retrait du montant accumulé)</option>
+        <option value="pyf">Pay Yourself First (retrait du montant accumulé)</option>
+        <option value="autre">Autre</option>
+      </select>
+    </div>
+    <div class="field" id="remb-carte-wrap"><label>Quel compte débit?</label><select id="remb-carte"><option value="">— Sélectionner —</option></select></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="confirmerRemboursement()" style="flex:1;background:#C9A84C;color:#1A1612;font-weight:700;">Confirmer le remboursement</button>
+      <button class="btn btn-sm" onclick="fermerModaleRemboursement()" style="background:#F5F5F5;color:#37474F;border:1.5px solid #E0E0E0;">Annuler</button>
+    </div>
+  </div>
+</div>
+
 </main>
 <script>
-const DEFAUT={premium:false,nom:'Gilbert Guebong Noah',titre:'Gestion Financière Personnelle',categories:{revenu:[{nom:'Uber (courses)',couleur:'#1D6B4E'},{nom:'Salaire/emploi',couleur:'#0f6e56'}],depense:[{nom:'Loyer/logement',couleur:'#e24b4a'},{nom:'Prêt Windmill',couleur:'#d85a30'},{nom:'Épicerie/alimentation',couleur:'#ba7517'},{nom:'Transport/véhicule',couleur:'#1d4ed8'},{nom:'Frais académiques (ÉTS)',couleur:'#7c3aed'},{nom:'Autres dettes/abonnements',couleur:'#6b7280'},{nom:'Épargne personnelle',couleur:'#22c55e'},{nom:'Pay Yourself First (10%)',couleur:'#0d9488'}]},cartes:{credit:[{nom:'Visa Desjardins',couleur:'#1D6B4E',plafond:3000,soldeInitial:0},{nom:'Mastercard BMO',couleur:'#2563EB',plafond:5000,soldeInitial:0}],debit:[{nom:'Compte chèques Desjardins',couleur:'#C9A84C'}]}};
+const DEFAUT={premium:false,pyfPourcentage:10,nom:'Gilbert Guebong Noah',titre:'Gestion Financière Personnelle',categories:{revenu:[{nom:'Uber (courses)',couleur:'#1D6B4E'},{nom:'Salaire/emploi',couleur:'#0f6e56'}],depense:[{nom:'Loyer/logement',couleur:'#e24b4a'},{nom:'Prêt Windmill',couleur:'#d85a30'},{nom:'Épicerie/alimentation',couleur:'#ba7517'},{nom:'Transport/véhicule',couleur:'#1d4ed8'},{nom:'Frais académiques (ÉTS)',couleur:'#7c3aed'},{nom:'Autres dettes/abonnements',couleur:'#6b7280'},{nom:'Épargne personnelle',couleur:'#22c55e'},{nom:'Pay Yourself First',couleur:'#0d9488'},{nom:'Remboursement carte de crédit',couleur:'#8A6D1F'}]},cartes:{credit:[{nom:'Visa Desjardins',couleur:'#1D6B4E',plafond:3000,soldeInitial:0},{nom:'Mastercard BMO',couleur:'#2563EB',plafond:5000,soldeInitial:0}],debit:[{nom:'Compte chèques Desjardins',couleur:'#C9A84C'}]}};
 let config=JSON.parse(localStorage.getItem('bgc')||'null')||JSON.parse(JSON.stringify(DEFAUT));
 // Correction automatique des dates aberrantes (ex: 2024 au lieu de 2026)
 function corrigerDatesAberrantes(){
@@ -574,7 +601,7 @@ async function sauvegarderTransactionSupabase(tx){
     await _supabase.from('transactions').upsert({
       id:tx.id,user_id:currentUser.id,type:tx.type,cat:tx.cat,
       montant:tx.montant,date:tx.date,note:tx.note||'',mode:tx.mode||'',carte:tx.carte||'',
-      rembourse:tx.rembourse===true
+      rembourse:tx.rembourse===true,retrait:tx.retrait===true,remboursement_de:tx.remboursementDe||null
     });
   }catch(e){console.error('Erreur sync transaction Supabase:',e);}
 }
@@ -608,6 +635,7 @@ function nowLabel(){return new Date().toLocaleDateString('fr-CA',{weekday:'long'
 function sum(arr,type){return arr.filter(t=>t.type===type).reduce((s,t)=>s+t.montant,0);}
 function detteCreditEnAttente(arr){return arr.filter(t=>t.type==='depense'&&t.mode==='credit'&&!t.rembourse).reduce((s,t)=>s+t.montant,0);}
 function depNonCredit(arr){return arr.filter(t=>t.type==='depense'&&t.mode!=='credit').reduce((s,t)=>s+t.montant,0);}
+function netCategorie(txs,matchFn){return txs.filter(t=>t.type==='depense'&&matchFn(t.cat)).reduce((s,t)=>s+(t.retrait?-t.montant:t.montant),0);}
 function txJour(d){return transactions.filter(t=>t.date===d);}
 function getPremierJourSemaine(){
   try {
@@ -768,7 +796,8 @@ async function chargerDonneesSupabase() {
       id: t.id, type: t.type, cat: t.cat,
       montant: parseFloat(t.montant), date: t.date,
       note: t.note || '', mode: t.mode || '', carte: t.carte || '',
-      rembourse: t.rembourse === true
+      rembourse: t.rembourse === true, retrait: t.retrait === true,
+      remboursementDe: t.remboursement_de || undefined
     }));
     saveCfgLocal();saveTx();
   } catch(e) { console.error('Erreur chargement Supabase:', e); }
@@ -1167,6 +1196,7 @@ function appliquerProfil(){
 document.title='Finia — '+(config.nom||'Smart Finance · AI');
   if(document.getElementById('p-nom'))document.getElementById('p-nom').value=config.nom||'';
   if(document.getElementById('p-titre'))document.getElementById('p-titre').value=config.titre||'';
+  if(document.getElementById('p-pyf'))document.getElementById('p-pyf').value=(config.pyfPourcentage!==undefined?config.pyfPourcentage:10);
 }
 
 function switchTab(t,btn){
@@ -1216,6 +1246,7 @@ function ajouterTransaction(){
   if(!cat){alert('Aucune catégorie. Ajoutes-en une dans Paramètres.');return;}
   if(!montant||montant<=0){alert('Saisis un montant valide.');return;}
   if(!date){alert('Choisis une date.');return;}
+  if((mode==='credit'||mode==='debit')&&!carte){alert('Choisis quelle carte a été utilisée pour cette transaction.');return;}
   const nouvelleTx={id:Date.now(),type,cat,montant,date,note,mode,carte,rembourse:mode==='credit'?false:undefined};
   transactions.push(nouvelleTx);
   saveTx();
@@ -1300,18 +1331,91 @@ function enregistrerModificationTransaction(){
 function toggleRembourse(id){
   const t=transactions.find(t=>t.id===id);
   if(!t)return;
-  t.rembourse=!t.rembourse;
+  if(!t.rembourse){
+    ouvrirModaleRemboursement(id);
+    return;
+  }
+  const liees=transactions.filter(x=>x.remboursementDe===id);
+  const msgConfirm=liees.length>0
+    ? 'Remettre cette transaction en attente de remboursement? La transaction de remboursement associée ('+fmt(liees[0].montant)+') sera supprimée, et le solde net reviendra à son état précédent.'
+    : 'Remettre cette transaction en attente de remboursement?';
+  if(!confirm(msgConfirm))return;
+  liees.forEach(x=>supprimerTransactionSupabase(x.id));
+  transactions=transactions.filter(x=>x.remboursementDe!==id);
+  t.rembourse=false;
   saveTx();sauvegarderTransactionSupabase(t);renderAll();
   const detailEl=document.getElementById('calDetail');
   if(calDetailDs&&detailEl&&detailEl.style.display!=='none')afficherDetailJour(calDetailDs);
-  if(t.rembourse&&t.carte){
-    const carteConfig=getCartesCredit().find(c=>c.nom===t.carte);
-    const soldeInitial=carteConfig?(carteConfig.soldeInitial||0):0;
-    const detteRestante=soldeInitial+transactions.filter(x=>x.type==='depense'&&x.carte===t.carte&&x.mode==='credit'&&!x.rembourse).reduce((s,x)=>s+x.montant,0);
-    toast('✅ Remboursement confirmé. Solde '+t.carte+' mis à jour : '+fmt(detteRestante)+'.');
-  } else if(!t.rembourse&&t.carte){
-    toast('⏳ Transaction remise en attente de remboursement.');
+  toast('⏳ Remboursement annulé, solde net rétabli.');
+}
+function ouvrirModaleRemboursement(id){
+  const t=transactions.find(t=>t.id===id);
+  if(!t)return;
+  document.getElementById('remb-id').value=t.id;
+  document.getElementById('remb-resume').textContent='Tu confirmes le remboursement de '+t.cat+' ('+fmt(t.montant)+', '+(t.carte||'carte non précisée')+').';
+  document.getElementById('remb-date').value=today();
+  document.getElementById('remb-canal').value='debit';
+  updateRembCarteSelect();
+  document.getElementById('remboursementModal').style.display='flex';
+}
+function fermerModaleRemboursement(){
+  document.getElementById('remboursementModal').style.display='none';
+}
+function updateRembCarteSelect(){
+  const canal=document.getElementById('remb-canal').value;
+  const wrap=document.getElementById('remb-carte-wrap');
+  const sel=document.getElementById('remb-carte');
+  if(canal==='debit'){
+    wrap.style.display='flex';
+    const comptes=getCartesDebit();
+    sel.innerHTML=comptes.length?comptes.map(c=>'<option value="'+c.nom+'">'+c.nom+'</option>').join(''):'<option value="">Aucun compte débit configuré</option>';
+  } else {
+    wrap.style.display='none';
+    sel.innerHTML='';
   }
+}
+function confirmerRemboursement(){
+  const id=parseFloat(document.getElementById('remb-id').value);
+  const t=transactions.find(t=>t.id===id);
+  if(!t)return;
+  const date=document.getElementById('remb-date').value;
+  const canal=document.getElementById('remb-canal').value;
+  const carteDebit=document.getElementById('remb-carte').value;
+  if(!date){alert('Choisis une date.');return;}
+  if(canal==='debit'&&!carteDebit){alert('Choisis quel compte débit a servi au remboursement.');return;}
+
+  t.rembourse=true;
+  saveTx();sauvegarderTransactionSupabase(t);
+
+  // Nettoyage défensif: supprimer toute transaction de remboursement déjà liée (évite les doublons)
+  const anciennes=transactions.filter(x=>x.remboursementDe===id);
+  anciennes.forEach(x=>supprimerTransactionSupabase(x.id));
+  transactions=transactions.filter(x=>x.remboursementDe!==id);
+
+  let cat, mode, carte, retrait=false;
+  if(canal==='debit'){ cat='Remboursement carte de crédit'; mode='debit'; carte=carteDebit; }
+  else if(canal==='epargne'){ cat='Épargne personnelle'; mode=''; carte=''; retrait=true; }
+  else if(canal==='pyf'){ cat='Pay Yourself First'; mode=''; carte=''; retrait=true; }
+  else { cat='Remboursement carte de crédit'; mode=''; carte=''; }
+
+  const txRemboursement={
+    id: Date.now(), type:'depense', cat, montant:t.montant, date,
+    note:'Remboursement '+(t.carte||'carte de crédit')+(retrait?' (retrait)':''),
+    mode, carte, retrait, remboursementDe:id
+  };
+  transactions.push(txRemboursement);
+  saveTx();
+  sauvegarderTransactionSupabase(txRemboursement);
+
+  fermerModaleRemboursement();
+  renderAll();
+  const detailEl=document.getElementById('calDetail');
+  if(calDetailDs&&detailEl&&detailEl.style.display!=='none')afficherDetailJour(calDetailDs);
+
+  const carteConfig=getCartesCredit().find(c=>c.nom===t.carte);
+  const soldeInitial=carteConfig?(carteConfig.soldeInitial||0):0;
+  const detteRestante=soldeInitial+transactions.filter(x=>x.type==='depense'&&x.carte===t.carte&&x.mode==='credit'&&!x.rembourse).reduce((s,x)=>s+x.montant,0);
+  toast('✅ Remboursement confirmé et déduit. Solde '+(t.carte||'carte')+' : '+fmt(detteRestante)+'.');
 }
 function toast(msg,duree){
   let el=document.getElementById('financeToast');
@@ -1573,14 +1677,14 @@ function genRecoJour(txs,rev,dep,solde){
   if(solde<0)r.push({type:'bad',titre:'Solde negatif',msg:`Tu as depense ${fmt(Math.abs(solde))} de plus que tes revenus du jour.`});
   // PYF
   if(rev>0){
-    const pyf=txs.filter(t=>t.cat==='Pay Yourself First (10%)');
-    const pyfTotal=pyf.reduce((s,t)=>s+t.montant,0);
-    const pyfCible=Math.round(rev*0.10*100)/100;
-    if(pyfTotal===0){r.push({type:'warn',titre:'Pay Yourself First non appliqué',msg:`Tu as gagné ${fmt(rev)} aujourd'hui. Verse-toi ton 10% (${fmt(pyfCible)}) avant de payer quoi que ce soit.`});}
+    const pyfPct=(config.pyfPourcentage!==undefined?config.pyfPourcentage:10);
+    const pyfTotal=netCategorie(txs,c=>c.startsWith('Pay Yourself First'));
+    const pyfCible=Math.round(rev*(pyfPct/100)*100)/100;
+    if(pyfTotal===0){r.push({type:'warn',titre:'Pay Yourself First non appliqué',msg:`Tu as gagné ${fmt(rev)} aujourd'hui. Verse-toi ton ${pyfPct}% (${fmt(pyfCible)}) avant de payer quoi que ce soit.`});}
     else if(pyfTotal>=pyfCible-0.01){r.push({type:'good',titre:'Pay Yourself First respecté',msg:`Bravo! Tu t'es versé ${fmt(pyfTotal)}, soit ${Math.round(pyfTotal/rev*100)}% de tes revenus du jour.`});}
     else{r.push({type:'warn',titre:'PYF incomplet',msg:`Tu t'es versé ${fmt(pyfTotal)} sur ${fmt(pyfCible)} recommandés. Complète ce virement.`});}
   }
-  const epargne=txs.filter(t=>t.cat==='Épargne personnelle').reduce((s,t)=>s+t.montant,0);
+  const epargne=netCategorie(txs,c=>c==='Épargne personnelle');
   if(epargne>0)r.push({type:'good',titre:'Épargne enregistrée',msg:`${fmt(epargne)} mis de côté aujourd'hui.`});
   // Alerte plafond carte de crédit (basée sur le vrai solde, pas seulement aujourd'hui)
   getCartesCredit().forEach(carteConfig=>{
@@ -1601,13 +1705,14 @@ function genRecoSemaine(txs,rev,dep,solde,taux){
   if(taux!==null&&taux<=0)r.push({type:'bad',titre:'Aucune épargne cette semaine',msg:`Tes dépenses dépassent tes revenus de ${fmt(Math.abs(solde))}. Identifie ce qui peut être réduit.`});
   if(rev>0&&dep/rev>0.8)r.push({type:'warn',titre:'Dépenses très élevées',msg:`Tes dépenses représentent ${Math.round(dep/rev*100)}% de tes revenus cette semaine.`});
   if(rev>0){
-    const pyfSem=txs.filter(t=>t.cat==='Pay Yourself First (10%)').reduce((s,t)=>s+t.montant,0);
-    const pyfCible=Math.round(rev*0.10*100)/100;
-    if(pyfSem===0)r.push({type:'warn',titre:'PYF non appliqué cette semaine',msg:`Tu as gagné ${fmt(rev)} cette semaine sans te verser ton 10% (${fmt(pyfCible)}). Pense à le faire maintenant.`});
+    const pyfPct=(config.pyfPourcentage!==undefined?config.pyfPourcentage:10);
+    const pyfSem=netCategorie(txs,c=>c.startsWith('Pay Yourself First'));
+    const pyfCible=Math.round(rev*(pyfPct/100)*100)/100;
+    if(pyfSem===0)r.push({type:'warn',titre:'PYF non appliqué cette semaine',msg:`Tu as gagné ${fmt(rev)} cette semaine sans te verser ton ${pyfPct}% (${fmt(pyfCible)}). Pense à le faire maintenant.`});
     else if(pyfSem>=pyfCible-0.01)r.push({type:'good',titre:'Pay Yourself First respecté',msg:`Tu t'es versé ${fmt(pyfSem)} cette semaine, soit ${Math.round(pyfSem/rev*100)}% de tes revenus.`});
     else r.push({type:'warn',titre:'PYF partiel cette semaine',msg:`Tu t'es versé ${fmt(pyfSem)} sur ${fmt(pyfCible)} recommandés. Il te reste ${fmt(pyfCible-pyfSem)} à virer.`});
   }
-  const epS=txs.filter(t=>t.cat==='Épargne personnelle').reduce((s,t)=>s+t.montant,0);
+  const epS=netCategorie(txs,c=>c==='Épargne personnelle');
   if(epS>0)r.push({type:'good',titre:'Épargne de la semaine',msg:`${fmt(epS)} mis de côté cette semaine.`});
   return r;
 }
@@ -1624,13 +1729,14 @@ function genRecoMois(txs,rev,dep,solde,taux,dC,rC){
   const top=Object.entries(dC).sort((a,b)=>b[1]-a[1])[0];
   if(top&&rev>0&&top[1]/rev>0.35)r.push({type:'warn',titre:`Dépense dominante: ${top[0]}`,msg:`Cette catégorie représente ${Math.round(top[1]/rev*100)}% de tes revenus ce mois (${fmt(top[1])}). C'est un poste à surveiller.`});
   if(rev>0){
-    const pyfM=dC['Pay Yourself First (10%)']||0;
-    const pyfCible=Math.round(rev*0.10*100)/100;
-    if(pyfM===0)r.push({type:'bad',titre:'PYF absent ce mois',msg:`Tu as gagné ${fmt(rev)} ce mois sans te verser ton 10% (${fmt(pyfCible)}). Applique cette règle dès le prochain revenu.`});
+    const pyfPct=(config.pyfPourcentage!==undefined?config.pyfPourcentage:10);
+    const pyfM=netCategorie(txs,c=>c.startsWith('Pay Yourself First'));
+    const pyfCible=Math.round(rev*(pyfPct/100)*100)/100;
+    if(pyfM===0)r.push({type:'bad',titre:'PYF absent ce mois',msg:`Tu as gagné ${fmt(rev)} ce mois sans te verser ton ${pyfPct}% (${fmt(pyfCible)}). Applique cette règle dès le prochain revenu.`});
     else if(pyfM>=pyfCible-0.01)r.push({type:'good',titre:'Pay Yourself First respecté ce mois',msg:`Tu t'es versé ${fmt(pyfM)} sur ${fmt(pyfCible)} recommandés. Excellent comportement financier!`});
     else r.push({type:'warn',titre:'PYF partiel ce mois',msg:`Tu t'es versé ${fmt(pyfM)} sur ${fmt(pyfCible)} recommandés. Il reste ${fmt(pyfCible-pyfM)} à combler.`});
   }
-  const epM=dC['Épargne personnelle']||0;
+  const epM=netCategorie(txs,c=>c==='Épargne personnelle');
   if(epM>0)r.push({type:'good',titre:'Épargne du mois',msg:`${fmt(epM)} mis de côté ce mois. Sur 12 mois, cela représente ${fmt(epM*12)} par an.`});
   else if(rev>0)r.push({type:'warn',titre:'Aucune épargne ce mois',msg:"Aucune entrée dans Épargne personnelle ce mois. Essaie de mettre de côté même un petit montant."});
   // Alerte plafond carte de crédit (basée sur le vrai solde global)
@@ -1687,7 +1793,9 @@ function changerCouleur(type,index,couleur){
 function sauvegarderProfil(){
   config.nom=document.getElementById('p-nom').value.trim();
   config.titre=document.getElementById('p-titre').value.trim();
-  saveCfg();appliquerProfil();flash();
+  const pyfVal=parseFloat(document.getElementById('p-pyf').value);
+  config.pyfPourcentage=(!isNaN(pyfVal)&&pyfVal>=0&&pyfVal<=100)?pyfVal:(config.pyfPourcentage||10);
+  saveCfg();appliquerProfil();renderAll();flash();
 }
 function flash(){
   const el=document.getElementById('saveAlert');el.style.display='block';
