@@ -499,8 +499,8 @@ input:focus,select:focus{border-color:var(--accent);background:#FFFFFF;}
     <div class="card-title">❓ Aide &amp; Guides</div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:1rem">Besoin d'aide pour utiliser Finia? Télécharge un guide, ou écris-nous directement.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <a class="btn btn-sm" style="background:#C9A84C;color:#1A1612;font-weight:700;text-decoration:none;" href="https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Simplifie.pdf" target="_blank">⬇ Guide rapide (PDF)</a>
-      <a class="btn btn-sm" style="background:#F5F5F5;color:#37474F;border:1.5px solid #E0E0E0;text-decoration:none;" href="https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Beta-Testeur.pdf" target="_blank">⬇ Guide complet (PDF)</a>
+      <a id="lien-guide-rapide" class="btn btn-sm" style="background:#C9A84C;color:#1A1612;font-weight:700;text-decoration:none;" href="https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Simplifie.pdf" target="_blank">⬇ Guide rapide (PDF)</a>
+      <a id="lien-guide-complet" class="btn btn-sm" style="background:#F5F5F5;color:#37474F;border:1.5px solid #E0E0E0;text-decoration:none;" href="https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Beta-Testeur.pdf" target="_blank">⬇ Guide complet (PDF)</a>
     </div>
     <p style="font-size:12px;color:var(--text3);">Toujours bloqué? Écris à <strong>finia.contact@gmail.com</strong>.</p>
   </div>
@@ -2197,6 +2197,14 @@ function renderParams(){
   renderCarteList('debit');
   initSelecteurRapport();
   chargerRapports();
+  rafraichirLiensGuides();
+}
+function rafraichirLiensGuides(){
+  const t=Date.now();
+  const lienRapide=document.getElementById('lien-guide-rapide');
+  const lienComplet=document.getElementById('lien-guide-complet');
+  if(lienRapide)lienRapide.href='https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Simplifie.pdf?v='+t;
+  if(lienComplet)lienComplet.href='https://ydmdnounskvkroxtiaux.supabase.co/storage/v1/object/public/guides/Finia-Guide-Beta-Testeur.pdf?v='+t;
 }
 function renderCatList(type){
   const el=document.getElementById(type==='revenu'?'listRevenu':'listDepense');
